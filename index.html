@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sticky — The Quiet Stage</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #f4ead8;
+    --dim: #cbbfa8;
+    --gold: #e0c17a;
+    --blood: #8e2433;
+    --panel: rgba(10, 6, 8, 0.9);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #070405;
+    color: var(--ink);
+    font-family: Palatino, "Iowan Old Style", Georgia, serif;
+  }
+  body { display: grid; place-items: center; }
+  #frame {
+    position: relative;
+    width: min(100vw, calc(100vh * 16 / 9));
+    height: min(100vh, calc(100vw * 9 / 16));
+    background: #12080b;
+    overflow: hidden;
+  }
+  canvas { width: 100%; height: 100%; display: block; }
+  #flash {
+    position: absolute;
+    inset: 0;
+    background: #e9fbff;
+    opacity: 0;
+    pointer-events: none;
+  }
+  #hud, #title, #end, #touch { position: absolute; }
+  #hud {
+    inset: 0;
+    pointer-events: none;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
+    font-size: 13px;
+    letter-spacing: 0.08em;
+  }
+  #zaps {
+    position: absolute;
+    top: 22px;
+    left: 28px;
+  }
+  #zaps b { color: var(--gold); font-weight: 700; }
+  #act {
+    position: absolute;
+    top: 22px;
+    right: 28px;
+    text-align: right;
+  }
+  #track {
+    position: absolute;
+    left: 28px;
+    right: 28px;
+    bottom: 22px;
+    height: 3px;
+    background: rgba(244, 234, 216, 0.18);
+  }
+  #track i {
+    display: block;
+    height: 100%;
+    width: 0%;
+    background: var(--gold);
+  }
+  #hint, #chat {
+    position: absolute;
+    left: 28px;
+    right: 28px;
+    text-align: center;
+    text-transform: uppercase;
+  }
+  #hint { bottom: 42px; color: var(--dim); }
+  #chat {
+    top: 52px;
+    color: var(--gold);
+    opacity: 0;
+    transition: opacity 0.2s linear;
+  }
+  #mute {
+    pointer-events: auto;
+    position: absolute;
+    top: 46px;
+    left: 28px;
+    background: transparent;
+    color: var(--dim);
+    border: 1px solid rgba(244, 234, 216, 0.25);
+    font: inherit;
+    letter-spacing: 0.12em;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+  #title, #end {
+    background: var(--panel);
+    border-left: 1px solid rgba(224, 193, 122, 0.35);
+  }
+  #title {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(460px, 46%);
+    padding: 36px 32px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 14px;
+  }
+  #title.hidden, #end.hidden { display: none; }
+  h1 {
+    margin: 0;
+    font-size: 56px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    line-height: 0.9;
+  }
+  h2 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+  }
+  p { margin: 0; color: var(--dim); line-height: 1.45; font-size: 16px; }
+  .keys { color: var(--ink); font-size: 15px; line-height: 1.55; }
+  button.go, button.again {
+    margin-top: 8px;
+    align-self: flex-start;
+    background: var(--gold);
+    color: #1a100c;
+    border: 0;
+    font: inherit;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 12px 16px;
+    cursor: pointer;
+  }
+  #best { font-family: ui-monospace, Menlo, monospace; font-size: 12px; letter-spacing: 0.08em; color: var(--dim); }
+  #end {
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(10, 6, 8, 0.45);
+    border-left: 0;
+  }
+  #end .card {
+    width: min(520px, 86%);
+    padding: 28px 32px;
+    background: rgba(10, 6, 8, 0.92);
+    border: 1px solid rgba(224, 193, 122, 0.35);
+  }
+  #end h1 { font-size: 42px; letter-spacing: 0.08em; }
+  #touch {
+    left: 12px;
+    right: 12px;
+    bottom: 36px;
+    display: none;
+    gap: 8px;
+  }
+  #touch button {
+    flex: 1;
+    background: rgba(10, 6, 8, 0.72);
+    color: var(--ink);
+    border: 1px solid rgba(224, 193, 122, 0.4);
+    font: inherit;
+    letter-spacing: 0.12em;
+    padding: 16px 8px;
+  }
+  @media (pointer: coarse) {
+    #touch { display: flex; }
+    #title { width: 100%; border-left: 0; background: rgba(10, 6, 8, 0.78); }
+  }
+</style>
+</head>
+<body>
+<div id="frame">
+  <canvas id="c" width="1280" height="720"></canvas>
+  <div id="flash"></div>
+  <div id="hud">
+    <div id="zaps">ZAPS <b>0</b></div>
+    <button id="mute" type="button">SOUND ON</button>
+    <div id="act">ACT I</div>
+    <div id="chat"></div>
+    <div id="hint">Jump the hurdles. The traps pop up.</div>
+    <div id="track"><i id="bar"></i></div>
+  </div>
+  <div id="touch">
+    <button type="button" id="bLeft">LEFT</button>
+    <button type="button" id="bSlow">SLOW</button>
+    <button type="button" id="bJump">JUMP</button>
+    <button type="button" id="bRight">RIGHT</button>
+  </div>
+  <section id="title">
+    <h2>A live crossing</h2>
+    <h1>STICKY</h1>
+    <p>Three stages a night, and each one is built differently. Jump the crates, the springs, and the swinging weight. Hidden traps still pop under you. Die and you replay that stage. Clear it and the next one is a new layout.</p>
+    <p class="keys">← → move &nbsp;·&nbsp; hold Shift to walk slow<br>Space or ↑ jump &nbsp;·&nbsp; hold it to jump far<br>R starts the night over</p>
+    <button class="go" id="play" type="button">Step on stage</button>
+    <div id="best"></div>
+  </section>
+  <section id="end" class="hidden">
+    <div class="card">
+      <h2 id="rank"></h2>
+      <h1 id="bow">Bow.</h1>
+      <p id="summary"></p>
+      <p id="record"></p>
+      <button class="again" id="again" type="button">Another night</button>
+    </div>
+  </section>
+</div>
+<script>
+const VW = 1280;
+const VH = 720;
+const GROUND = 500;
+const PLAYER_W = 22;
+const PLAYER_H = 68;
+const GRAVITY = 2100;
+const JUMP_V = -700;
+const CUT_V = -430;
+const RUN = 300;
+const WALK = 125;
+const POP_TIME = 0.11;
+
+const STAGE_COUNT = 3;
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick(rng, list) {
+  return list[Math.floor(rng() * list.length)];
+}
+
+function buildStage(n, rng) {
+  const hurdles = [];
+  const traps = [];
+  const springs = [];
+  const swings = [];
+  let x = 480;
+  const beats = 5 + n;
+  const trapChance = Math.min(0.82, 0.5 + n * 0.1);
+  for (let i = 0; i < beats; i++) {
+    const roll = rng();
+    let h = 34;
+    let w = 50;
+    let slide = 0;
+    let bob = 0;
+    let rate = 1.4;
+    if (roll < 0.26) {
+      h = 28 + Math.floor(rng() * 8);
+      w = 54 + Math.floor(rng() * 18);
+    } else if (roll < 0.48) {
+      h = 50 + Math.floor(rng() * 18);
+      w = 42 + Math.floor(rng() * 12);
+    } else if (roll < 0.74) {
+      h = 26;
+      w = 58;
+      slide = 56 + Math.floor(rng() * 28);
+      rate = 1.15 + rng() * 0.7;
+    } else {
+      h = 28;
+      w = 46;
+      bob = 20 + Math.floor(rng() * 22);
+      rate = 1.15 + rng() * 0.75;
+    }
+    hurdles.push({ x, w, h, slide, bob, rate });
+    x += w + slide + 78 + Math.floor(rng() * 36);
+    const follow = rng();
+    if (follow < trapChance) {
+      const kinds = ["spikes", "wire", "bag"];
+      if (n >= 2) kinds.push("highwire");
+      const kind = pick(rng, kinds);
+      if (kind === "spikes") {
+        traps.push({ x, kind: "spikes", w: 46 + Math.floor(rng() * 22) });
+        x += 156;
+      } else if (kind === "bag") {
+        traps.push({ x: x + 16, kind: "bag", w: 36 });
+        x += 168;
+      } else {
+        traps.push({ x: x + 8, kind: "wire", high: kind === "highwire", w: 20 });
+        x += 148;
+      }
+    } else if (follow < trapChance + 0.2) {
+      springs.push({ x, w: 44 });
+      x += 136;
+    } else if (n > 1 && follow < trapChance + 0.42) {
+      swings.push({
+        x: x + 120,
+        reach: 90 + Math.floor(rng() * 40),
+        speed: 1.05 + rng() * 0.55
+      });
+      x += 280;
+    } else {
+      x += 100;
+    }
+  }
+  const exit = x + 180;
+  return {
+    hurdles,
+    traps,
+    springs,
+    swings,
+    exit,
+    width: exit + 460,
+    doomSpeed: 58 + n * 10
+  };
+}
+
+const BARKS = {
+  spikes: ["Chat: the floor grew teeth", "Chat: from the top", "Chat: run it back"],
+  wire: ["Chat: that wire was not there", "Chat: back to the curtain", "Chat: clip the pop"],
+  bag: ["Chat: sandbag", "Chat: the rigging woke up", "Chat: from the top"],
+  dark: ["Chat: the dark caught him", "Chat: he stopped", "Chat: keep moving"],
+  swing: ["Chat: the weight", "Chat: bad timing", "Chat: from the top"],
+  close: ["Chat: close", "Chat: he felt the air"],
+  clear: ["Chat: he bowed", "Chat: clean night", "Chat: clip the quiet ones"]
+};
+
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+const flashEl = document.getElementById("flash");
+const zapsEl = document.querySelector("#zaps b");
+const actEl = document.getElementById("act");
+const chatEl = document.getElementById("chat");
+const hintEl = document.getElementById("hint");
+const barEl = document.getElementById("bar");
+const titleEl = document.getElementById("title");
+const endEl = document.getElementById("end");
+const bestEl = document.getElementById("best");
+const showBoxes = new URLSearchParams(location.search).has("boxes");
+
+const images = {};
+for (const name of ["backdrop", "portrait", "portraitZap", "poster"]) {
+  const img = new Image();
+  img.onload = () => { images[name] = img; };
+  img.src = "assets/" + name + ".png";
+}
+
+const keys = new Set();
+const hold = { left: false, right: false, slow: false, jump: false };
+let jumpEdge = false;
+let muted = false;
+let ac = null;
+
+let mode = "title";
+let camX = 0;
+let shake = 0;
+let flash = 0;
+let zaps = 0;
+let time = 0;
+let actName = "ACT I";
+let actBanner = 0;
+let chatT = 0;
+let wipe = 0;
+let doom = -220;
+let closeLock = 0;
+let stageNum = 1;
+let nightRng = null;
+let level = null;
+
+function stageLabel() {
+  return "Stage " + stageNum + " of " + STAGE_COUNT;
+}
+
+function newLayout() {
+  nightRng = mulberry32((Math.random() * 0x7fffffff) | 0);
+  stageNum = 1;
+  level = buildStage(stageNum, nightRng);
+}
+let traps = null;
+let player = null;
+let particles = [];
+let lastBark = "";
+
+function freshTraps() {
+  return {
+    list: level.traps.map((t) => ({
+      ...t,
+      w: t.w || 36,
+      state: "hidden",
+      t: 0,
+      y: 180,
+      vy: 0,
+      label: 0,
+      cleared: false
+    }))
+  };
+}
+
+function resetRun() {
+  newLayout();
+  traps = freshTraps();
+  player = {
+    x: 240,
+    y: GROUND - PLAYER_H,
+    vx: 0,
+    vy: 0,
+    onGround: true,
+    facing: 1,
+    shock: 0,
+    iframes: 0,
+    coyote: 0,
+    buffer: 0,
+    cut: false,
+    squash: 0,
+    step: 0,
+    feet: 0
+  };
+  camX = 0;
+  shake = 0;
+  flash = 0;
+  zaps = 0;
+  time = 0;
+  wipe = 0;
+  doom = -220;
+  closeLock = 0;
+  actName = "ACT I";
+  actBanner = 2.2;
+  chatT = 0;
+  particles = [];
+  zapsEl.textContent = "0";
+  setAct(stageLabel());
+}
+
+function setAct(name) {
+  actName = name;
+  actEl.textContent = name;
+  actBanner = 2.2;
+}
+
+function loadBest() {
+  try { return JSON.parse(localStorage.getItem("sticky-quiet-best") || "null"); }
+  catch (e) { return null; }
+}
+
+function showBest() {
+  const best = loadBest();
+  bestEl.textContent = best
+    ? "Best night: " + best.zaps + " zaps, " + best.time.toFixed(1) + "s"
+    : "No clear yet. The collar is patient.";
+}
+
+function audioCtx() {
+  if (!ac) ac = new AudioContext();
+  if (ac.state === "suspended") ac.resume();
+  return ac;
+}
+
+function tone(freq, dur, type, gain, slide) {
+  if (muted) return;
+  const a = audioCtx();
+  const t = a.currentTime;
+  const o = a.createOscillator();
+  const g = a.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, slide), t + dur);
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g);
+  g.connect(a.destination);
+  o.start(t);
+  o.stop(t + dur + 0.02);
+}
+
+function noise(dur, gain, freq) {
+  if (muted) return;
+  const a = audioCtx();
+  const count = Math.floor(a.sampleRate * dur);
+  const buf = a.createBuffer(1, count, a.sampleRate);
+  const data = buf.getChannelData(0);
+  for (let i = 0; i < count; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / count);
+  const src = a.createBufferSource();
+  src.buffer = buf;
+  const filter = a.createBiquadFilter();
+  filter.type = "highpass";
+  filter.frequency.value = freq || 700;
+  const g = a.createGain();
+  g.gain.value = gain;
+  src.connect(filter);
+  filter.connect(g);
+  g.connect(a.destination);
+  src.start();
+}
+
+function zapSound() {
+  noise(0.18, 0.35, 400);
+  tone(160, 0.22, "sawtooth", 0.08, 45);
+  tone(520, 0.08, "square", 0.04, 180);
+}
+
+function bark(list) {
+  let line = list[Math.floor(Math.random() * list.length)];
+  if (line === lastBark) line = list[0];
+  lastBark = line;
+  chatEl.textContent = line;
+  chatT = 2.1;
+}
+
+function burst(x, y, color, n) {
+  for (let i = 0; i < n; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 280,
+      vy: -40 - Math.random() * 220,
+      life: 0.35 + Math.random() * 0.35,
+      max: 0.7,
+      color,
+      r: 1.5 + Math.random() * 2
+    });
+  }
+}
+
+function kill(kind) {
+  if (wipe > 0) return;
+  zaps += 1;
+  zapsEl.textContent = String(zaps);
+  player.shock = 1;
+  player.vx = 0;
+  player.vy = -180;
+  player.onGround = false;
+  player.cut = false;
+  wipe = 0.78;
+  flash = 1;
+  shake = 20;
+  zapSound();
+  bark(BARKS[kind] || BARKS.spikes);
+  burst(player.x + PLAYER_W / 2, player.y + 16, "#d8f7ff", 18);
+}
+
+function backToStart() {
+  const keptZaps = zaps;
+  const keptTime = time;
+  traps = freshTraps();
+  player.x = 240;
+  player.y = GROUND - PLAYER_H;
+  player.vx = 0;
+  player.vy = 0;
+  player.onGround = true;
+  player.shock = 0;
+  player.cut = false;
+  player.squash = 0.28;
+  player.facing = 1;
+  zaps = keptZaps;
+  time = keptTime;
+  wipe = 0;
+  doom = -220;
+  camX = 0;
+  zapsEl.textContent = String(zaps);
+  setAct(stageLabel());
+}
+
+function clearStage() {
+  if (stageNum >= STAGE_COUNT) {
+    win();
+    return;
+  }
+  stageNum += 1;
+  level = buildStage(stageNum, nightRng);
+  traps = freshTraps();
+  player.x = 240;
+  player.y = GROUND - PLAYER_H;
+  player.vx = 0;
+  player.vy = 0;
+  player.onGround = true;
+  player.shock = 0;
+  player.cut = false;
+  doom = -220;
+  camX = 0;
+  shake = 8;
+  bark(["Chat: new stage", "Chat: different boards"]);
+  tone(523, 0.12, "triangle", 0.05);
+  setAct(stageLabel());
+}
+
+function aabb(ax, ay, aw, ah, bx, by, bw, bh) {
+  return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+}
+
+function centerX() {
+  return player.x + PLAYER_W / 2;
+}
+
+function liveHurdle(h) {
+  const slide = h.slide ? Math.sin(time * h.rate) * h.slide : 0;
+  const bob = h.bob ? (Math.sin(time * h.rate) * 0.5 + 0.5) * h.bob : 0;
+  const hh = h.h + bob;
+  return { x: h.x + slide, w: h.w, h: hh, top: GROUND - hh, moving: !!(h.slide || h.bob) };
+}
+
+function hurdleTopAt(cx, feet, previousFeet) {
+  let top = null;
+  for (const h of level.hurdles) {
+    const box = liveHurdle(h);
+    const over = cx > box.x && cx < box.x + box.w;
+    if (!over) continue;
+    if (previousFeet <= box.top + 12 && feet >= box.top && (top == null || box.top < top)) top = box.top;
+  }
+  return top;
+}
+
+function springUnder(cx) {
+  for (const s of level.springs) {
+    if (cx > s.x && cx < s.x + s.w) return true;
+  }
+  return false;
+}
+
+function swingWeight(s) {
+  const angle = Math.sin(time * s.speed) * 1.05;
+  return { x: s.x + Math.sin(angle) * s.reach, y: 300 + (1 - Math.cos(angle)) * 90 };
+}
+
+function update(dt) {
+  const left = keys.has("arrowleft") || keys.has("a") || hold.left;
+  const right = keys.has("arrowright") || keys.has("d") || hold.right;
+  const slow = keys.has("shift") || hold.slow;
+  const jumpHeld = keys.has(" ") || keys.has("arrowup") || keys.has("w") || hold.jump;
+
+  if (mode === "play") {
+    time += dt;
+    if (wipe > 0) {
+      wipe -= dt;
+      player.shock = Math.max(0, player.shock - dt);
+      player.vy += GRAVITY * dt;
+      player.y += player.vy * dt;
+      if (player.y > GROUND - PLAYER_H) {
+        player.y = GROUND - PLAYER_H;
+        player.vy = 0;
+        player.onGround = true;
+      }
+      if (wipe <= 0) backToStart();
+    } else {
+      if (player.shock > 0) player.shock -= dt;
+      let dir = 0;
+      if (left) dir -= 1;
+      if (right) dir += 1;
+      player.vx = dir * (slow ? WALK : RUN);
+      if (dir) player.facing = dir;
+
+      if (jumpEdge) player.buffer = 0.12;
+      else player.buffer -= dt;
+      if (player.onGround) player.coyote = 0.1;
+      else player.coyote -= dt;
+
+      if (player.buffer > 0 && player.coyote > 0) {
+        player.vy = JUMP_V;
+        player.onGround = false;
+        player.coyote = 0;
+        player.buffer = 0;
+        player.cut = true;
+        player.squash = -0.2;
+        tone(420, 0.08, "square", 0.03, 640);
+      }
+      if (player.cut && !jumpHeld && player.vy < CUT_V) {
+        player.vy = CUT_V;
+        player.cut = false;
+      }
+
+      player.vy += GRAVITY * dt;
+      player.x += player.vx * dt;
+      if (player.x < 80) player.x = 80;
+      if (player.x > level.width - 80) player.x = level.width - 80;
+      for (const h of level.hurdles) {
+        const box = liveHurdle(h);
+        if (player.y + PLAYER_H <= box.top + 4) continue;
+        if (aabb(player.x, player.y, PLAYER_W, PLAYER_H, box.x, box.top, box.w, box.h)) {
+          player.x = centerX() < box.x + box.w / 2 ? box.x - PLAYER_W - 0.5 : box.x + box.w + 0.5;
+          player.vx = 0;
+        }
+      }
+
+      player.y += player.vy * dt;
+      const feet = player.y + PLAYER_H;
+      const previousFeet = feet - player.vy * dt;
+      const platform = hurdleTopAt(centerX(), feet, previousFeet);
+      const stand = platform == null ? GROUND : platform;
+      if (player.vy >= 0 && feet >= stand && previousFeet <= stand + 14) {
+        const launched = platform == null && springUnder(centerX()) && (!player.onGround || !springUnder(centerX() - player.vx * dt));
+        if (launched) {
+          player.y = GROUND - PLAYER_H;
+          player.vy = -960;
+          player.onGround = false;
+          player.cut = false;
+          player.squash = -0.4;
+          tone(160, 0.14, "square", 0.06, 640);
+          burst(centerX(), GROUND, "#e0c17a", 8);
+        } else {
+          if (!player.onGround) {
+            player.squash = 0.22;
+            burst(centerX(), stand, "#c4a06a", 4);
+          }
+          player.y = stand - PLAYER_H;
+          player.vy = 0;
+          player.onGround = true;
+          player.cut = false;
+        }
+      } else {
+        player.onGround = false;
+      }
+
+      const cx = centerX();
+      for (const trap of traps.list) {
+        if (trap.state === "hidden" && cx > trap.x - 78 && cx < trap.x + (trap.w || 20)) {
+          trap.state = "pop";
+          trap.t = POP_TIME;
+          tone(880, 0.06, "square", 0.045, 220);
+        }
+        if (trap.state === "pop") {
+          trap.t -= dt;
+          if (trap.t <= 0) {
+            trap.state = "live";
+            trap.label = 1.3;
+            shake = Math.max(shake, 8);
+            if (trap.kind === "bag") {
+              trap.y = 150;
+              trap.vy = 560;
+            }
+          }
+        }
+        if (trap.state !== "live" || wipe > 0) continue;
+        if (trap.kind === "spikes") {
+          const onDeck = player.y + PLAYER_H >= GROUND - 6;
+          if (onDeck && player.x < trap.x + trap.w && player.x + PLAYER_W > trap.x) kill("spikes");
+        } else if (trap.kind === "wire") {
+          const wy = trap.high ? GROUND - 58 : GROUND - 18;
+          if (aabb(player.x, player.y, PLAYER_W, PLAYER_H, trap.x - 8, wy, 16, 8)) kill("wire");
+        } else if (trap.kind === "bag") {
+          trap.vy += 3600 * dt;
+          trap.y += trap.vy * dt;
+          if (aabb(player.x, player.y, PLAYER_W, PLAYER_H, trap.x - 16, trap.y, 32, 30)) kill("bag");
+          else if (trap.y >= GROUND - 28) {
+            trap.y = GROUND - 28;
+            trap.vy = 0;
+          }
+        }
+        if (wipe <= 0 && trap.state === "live" && !trap.cleared && cx > trap.x + (trap.w || 36) + 12) {
+          trap.cleared = true;
+          if (closeLock <= 0 && cx < trap.x + 120) {
+            closeLock = 1.3;
+            bark(BARKS.close);
+            tone(700, 0.07, "triangle", 0.04);
+          }
+        }
+      }
+
+      for (const swing of level.swings) {
+        if (wipe > 0) break;
+        const weight = swingWeight(swing);
+        const px = centerX();
+        const py = player.y + 34;
+        const dx = px - weight.x;
+        const dy = py - weight.y;
+        if (dx * dx + dy * dy < 34 * 34) kill("swing");
+      }
+
+      doom += level.doomSpeed * dt;
+      if (wipe <= 0 && player.x < doom) kill("dark");
+
+      if (player.onGround && Math.abs(player.vx) > 20) {
+        player.feet += Math.abs(player.vx) * dt;
+        if (player.feet > 34) {
+          player.feet = 0;
+          noise(0.04, 0.05, 500);
+        }
+        player.step += dt * Math.abs(player.vx) * 0.045;
+      }
+
+      if (wipe <= 0 && player.onGround && centerX() > level.exit) clearStage();
+    }
+  } else {
+    player.step += dt * 2;
+    player.squash = Math.sin(time) * 0;
+    time += dt * 0.2;
+  }
+
+  player.squash += (0 - player.squash) * Math.min(1, dt * 8);
+  const target = Math.max(0, Math.min(level.width - VW, player.x - VW * 0.36));
+  camX += (target - camX) * Math.min(1, dt * 3.5);
+  if (shake > 0) shake *= Math.pow(0.05, dt);
+  if (flash > 0) flash = Math.max(0, flash - dt * 3.2);
+  flashEl.style.opacity = String(flash * 0.85);
+  if (chatT > 0) {
+    chatT -= dt;
+    chatEl.style.opacity = chatT > 0.3 ? "1" : String(Math.max(0, chatT / 0.3));
+  }
+  if (actBanner > 0) actBanner -= dt;
+  if (closeLock > 0) closeLock -= dt;
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.life -= dt;
+    p.vy += 700 * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  const progress = Math.max(0, Math.min(1, (centerX() - 240) / (level.exit - 240)));
+  barEl.style.width = (progress * 100) + "%";
+  actEl.style.visibility = mode === "play" ? "visible" : "hidden";
+  hintEl.textContent = mode !== "play"
+    ? ""
+    : wipe > 0
+      ? "From the top."
+      : "Stage " + stageNum + " stays until you clear it. The next one is a new layout.";
+
+  for (const trap of traps.list) if (trap.label > 0) trap.label -= dt;
+}
+
+function rankFor(n) {
+  if (n === 0) return ["Unmarked", "Not one zap. The chat will call it fake."];
+  if (n <= 2) return ["One take", "Almost quiet. They still heard the collar."];
+  if (n <= 5) return ["Highlight reel", "Enough shocks to earn the clip."];
+  if (n <= 9) return ["Main channel", "You finished. The collar finished too."];
+  return ["Encore", "The stage won tonight. It will still be here."];
+}
+
+function win() {
+  mode = "win";
+  bark(BARKS.clear);
+  tone(523, 0.15, "triangle", 0.05);
+  setTimeout(() => tone(659, 0.15, "triangle", 0.05), 140);
+  setTimeout(() => tone(784, 0.28, "triangle", 0.05), 280);
+  const [title, line] = rankFor(zaps);
+  document.getElementById("rank").textContent = title;
+  document.getElementById("summary").textContent = line + " " + zaps + " zaps. " + time.toFixed(1) + " seconds.";
+  const prev = loadBest();
+  const better = !prev || zaps < prev.zaps || (zaps === prev.zaps && time < prev.time);
+  if (better) localStorage.setItem("sticky-quiet-best", JSON.stringify({ zaps, time }));
+  document.getElementById("record").textContent = better
+    ? "New best night."
+    : prev
+      ? "Best is still " + prev.zaps + " zaps, " + prev.time.toFixed(1) + "s."
+      : "";
+  endEl.classList.remove("hidden");
+  showBest();
+}
+
+function startGame() {
+  audioCtx();
+  resetRun();
+  mode = "play";
+  titleEl.classList.add("hidden");
+  endEl.classList.add("hidden");
+}
+
+function drawBackdrop() {
+  ctx.fillStyle = "#1a1014";
+  ctx.fillRect(0, 0, VW, GROUND);
+  if (images.backdrop) {
+    ctx.drawImage(images.backdrop, 180, 28, 920, 300);
+  } else {
+    ctx.fillStyle = "#f0e2c6";
+    ctx.beginPath();
+    ctx.arc(930, 110, 42, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#12090c";
+    ctx.fillRect(868, 92, 10, 10);
+    for (let i = 0; i < 22; i++) {
+      const h = 24 + ((i * 53) % 78);
+      ctx.fillRect(250 + i * 34, 300 - h, 26, h);
+    }
+  }
+  ctx.fillStyle = "#24161b";
+  ctx.fillRect(0, 300, VW, GROUND - 300);
+}
+
+function drawAudience(tellX) {
+  for (let i = 0; i < 42; i++) {
+    const wx = 80 + i * 168;
+    const sx = wx - camX * 0.22;
+    if (sx < -30 || sx > VW + 30) continue;
+    const row = i % 3;
+    const y = 318 + row * 28;
+    ctx.fillStyle = row === 1 ? "#10080b" : "#1a0d11";
+    ctx.beginPath();
+    ctx.ellipse(sx, y + 16, 16, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx, y, 9, 0, Math.PI * 2);
+    ctx.fill();
+    if (tellX != null && Math.abs(sx - tellX) < 36 && row === 0) {
+      ctx.fillStyle = "#e0c17a";
+      ctx.fillRect(sx - 4, y - 2, 2, 2);
+      ctx.fillRect(sx + 2, y - 2, 2, 2);
+    }
+  }
+}
+
+function drawFloor() {
+  const plank = 40;
+  const start = Math.floor(camX / plank) * plank;
+  for (let x = start; x < camX + VW + plank; x += plank) {
+    const alt = Math.floor(x / plank) % 2;
+    ctx.fillStyle = alt ? "#6b452b" : "#5a3922";
+    ctx.fillRect(x - camX, GROUND, plank - 1, 22);
+  }
+  ctx.fillStyle = "#3b2616";
+  ctx.fillRect(0, GROUND + 22, VW, VH - GROUND - 22);
+  ctx.fillStyle = "#c4a06a";
+  ctx.fillRect(0, GROUND + 22, VW, 2);
+}
+
+function drawHurdles() {
+  for (const h of level.hurdles) {
+    const box = liveHurdle(h);
+    const sx = box.x - camX;
+    const top = box.top;
+    if (box.moving) {
+      ctx.fillStyle = "rgba(224, 193, 122, 0.35)";
+      const trackX = h.slide ? h.x - h.slide : box.x;
+      const trackW = h.slide ? h.w + h.slide * 2 : box.w;
+      ctx.fillRect(trackX - camX, GROUND - 4, trackW, 4);
+    }
+    ctx.fillStyle = box.moving ? "#a56b3a" : "#8d5a30";
+    ctx.fillRect(sx, top, box.w, box.h);
+    ctx.fillStyle = "#e0c17a";
+    ctx.fillRect(sx, top, box.w, 5);
+    ctx.strokeStyle = "#2a1a10";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx + 1, top + 1, box.w - 2, box.h - 2);
+    ctx.beginPath();
+    ctx.moveTo(sx + 6, top + 8);
+    ctx.lineTo(sx + box.w - 6, top + box.h - 6);
+    ctx.moveTo(sx + box.w - 6, top + 8);
+    ctx.lineTo(sx + 6, top + box.h - 6);
+    ctx.stroke();
+  }
+}
+
+function drawSprings() {
+  for (const s of level.springs) {
+    const sx = s.x - camX;
+    ctx.fillStyle = "#e0c17a";
+    ctx.fillRect(sx, GROUND - 8, s.w, 8);
+    ctx.strokeStyle = "#2a1a10";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(sx + 8, GROUND - 2);
+    ctx.lineTo(sx + s.w / 2, GROUND - 14);
+    ctx.lineTo(sx + s.w - 8, GROUND - 2);
+    ctx.stroke();
+  }
+}
+
+function drawSwings() {
+  for (const s of level.swings) {
+    const weight = swingWeight(s);
+    const px = s.x - camX;
+    const wx = weight.x - camX;
+    ctx.strokeStyle = "#cbbfa8";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(px, 300);
+    ctx.lineTo(wx, weight.y);
+    ctx.stroke();
+    ctx.fillStyle = "#d7d2c8";
+    ctx.beginPath();
+    ctx.arc(wx, weight.y, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "#2a1a10";
+    ctx.stroke();
+  }
+}
+
+function drawDoom() {
+  if (mode !== "play") return;
+  const sx = doom - camX;
+  if (sx <= 0) return;
+  ctx.fillStyle = "rgba(5, 1, 3, 0.78)";
+  ctx.fillRect(0, 0, Math.min(VW, sx), VH);
+  ctx.fillStyle = "#e23b3b";
+  ctx.fillRect(Math.min(VW, sx) - 4, 0, 4, VH);
+}
+
+function labelAt(x, y, text) {
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = "#f4ead8";
+  ctx.font = "12px ui-monospace, Menlo, monospace";
+  ctx.textAlign = "center";
+  ctx.fillText(text, x - camX, y);
+  ctx.restore();
+}
+
+function trapRise(trap) {
+  if (trap.state === "hidden") return 0;
+  if (trap.state === "pop") return 1 - Math.max(0, trap.t) / POP_TIME;
+  return 1;
+}
+
+function drawProps() {
+  for (const trap of traps.list) {
+    const rise = trapRise(trap);
+    if (rise <= 0) continue;
+    const sx = trap.x - camX;
+    if (trap.kind === "spikes") {
+      const n = Math.max(3, Math.round(trap.w / 14));
+      ctx.fillStyle = "#d7d2c8";
+      for (let i = 0; i < n; i++) {
+        const x0 = sx + (i * trap.w) / n;
+        const peak = GROUND - 36 * rise;
+        ctx.beginPath();
+        ctx.moveTo(x0 + 2, GROUND);
+        ctx.lineTo(x0 + trap.w / n / 2, peak);
+        ctx.lineTo(x0 + trap.w / n - 2, GROUND);
+        ctx.fill();
+      }
+      if (trap.label > 0) labelAt(trap.x + trap.w / 2, GROUND - 48, "SPIKES");
+    } else if (trap.kind === "wire") {
+      const wy = trap.high ? GROUND - 58 : GROUND - 18;
+      const y = GROUND - 90 + (wy - (GROUND - 90)) * rise;
+      ctx.strokeStyle = "#f4ead8";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(sx - 28, y);
+      ctx.lineTo(sx + 28, y);
+      ctx.stroke();
+      ctx.strokeStyle = "#e23b3b";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sx - 28, 300);
+      ctx.lineTo(sx - 28, y);
+      ctx.moveTo(sx + 28, 300);
+      ctx.lineTo(sx + 28, y);
+      ctx.stroke();
+      if (trap.label > 0) labelAt(trap.x, y - 16, trap.high ? "HIGH WIRE" : "WIRE");
+    } else if (trap.kind === "bag") {
+      const y = trap.state === "pop" ? 170 : trap.y;
+      ctx.strokeStyle = "#e0c17a";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(sx, 300);
+      ctx.lineTo(sx, y);
+      ctx.stroke();
+      ctx.fillStyle = "#8d6232";
+      ctx.globalAlpha = rise;
+      ctx.fillRect(sx - 16, y, 32, 28);
+      ctx.fillStyle = "#5c3e20";
+      ctx.fillRect(sx - 16, y, 32, 6);
+      ctx.globalAlpha = 1;
+      if (trap.label > 0) labelAt(trap.x, y - 14, "SANDBAG");
+    }
+  }
+}
+
+function poppingX() {
+  for (const trap of traps.list) if (trap.state === "pop") return trap.x;
+  return null;
+}
+
+function drawSticky(x, y, facing, shock, squash, step, airborne, moving) {
+  ctx.save();
+  ctx.translate(x, y + PLAYER_H);
+  ctx.scale(facing, 1);
+  const jx = shock > 0 ? Math.sin(shock * 90) * 3 : 0;
+  ctx.translate(jx, 0);
+  ctx.scale(1 + squash * 0.4, 1 - squash);
+  const leg = moving && !airborne ? Math.sin(step) * 14 : airborne ? 10 : 2;
+  const arm = moving && !airborne ? Math.cos(step) * 12 : airborne ? -16 : 4;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = shock > 0 ? 3.5 : 3;
+  ctx.strokeStyle = shock > 0 ? "#d9f8ff" : "#1a120e";
+  ctx.beginPath();
+  ctx.moveTo(0, -36);
+  ctx.lineTo(-8 - leg, 0);
+  ctx.moveTo(0, -36);
+  ctx.lineTo(8 + leg, 0);
+  ctx.moveTo(0, -36);
+  ctx.lineTo(0, -58);
+  ctx.moveTo(0, -50);
+  ctx.lineTo(-16, -38 + arm * 0.2);
+  ctx.moveTo(0, -50);
+  ctx.lineTo(16, -42 - arm * 0.3);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(0, -70, 10, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = "#e23b3b";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, -60, 5.5, Math.PI * 0.15, Math.PI * 0.85);
+  ctx.stroke();
+  ctx.fillStyle = "#f4ead8";
+  ctx.beginPath();
+  ctx.moveTo(0, -57);
+  ctx.lineTo(-8, -61);
+  ctx.lineTo(-8, -53);
+  ctx.closePath();
+  ctx.moveTo(0, -57);
+  ctx.lineTo(8, -61);
+  ctx.lineTo(8, -53);
+  ctx.closePath();
+  ctx.fill();
+  if (shock > 0) {
+    ctx.strokeStyle = "#d9f8ff";
+    ctx.beginPath();
+    ctx.moveTo(4, -74);
+    ctx.lineTo(8, -70);
+    ctx.moveTo(8, -74);
+    ctx.lineTo(4, -70);
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = "#1a120e";
+    ctx.fillRect(5, -72, 2, 2);
+  }
+  ctx.restore();
+}
+
+function drawExit() {
+  const sx = level.exit - 150 - camX;
+  ctx.fillStyle = "#6e2432";
+  ctx.fillRect(sx, 300, 160, GROUND - 300);
+  ctx.fillStyle = "#e0c17a";
+  ctx.fillRect(sx + 18, 300, 8, GROUND - 300);
+  ctx.font = "20px Palatino, Georgia, serif";
+  ctx.fillStyle = "#f4ead8";
+  ctx.fillText(stageNum >= STAGE_COUNT ? "BOW" : "NEXT", sx + 40, 390);
+}
+
+function drawCam() {
+  const x = 96;
+  const y = 128;
+  ctx.fillStyle = "#14080c";
+  ctx.fillRect(x, y, 150, 96);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, 150, 96);
+  ctx.clip();
+  const portrait = player.shock > 0 && images.portraitZap ? images.portraitZap : images.portrait;
+  if (portrait) {
+    ctx.drawImage(portrait, x + 4, y + 4, 142, 88);
+  } else {
+    ctx.strokeStyle = player.shock > 0 ? "#d9f8ff" : "#f4ead8";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x + 75, y + 48, 16, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "#e23b3b";
+    ctx.beginPath();
+    ctx.arc(x + 75, y + 64, 8, 0.2, Math.PI - 0.2);
+    ctx.stroke();
+    if (player.shock > 0) {
+      ctx.strokeStyle = "#d9f8ff";
+      ctx.beginPath();
+      ctx.moveTo(x + 68, y + 42);
+      ctx.lineTo(x + 74, y + 48);
+      ctx.moveTo(x + 74, y + 42);
+      ctx.lineTo(x + 68, y + 48);
+      ctx.moveTo(x + 80, y + 42);
+      ctx.lineTo(x + 86, y + 48);
+      ctx.moveTo(x + 86, y + 42);
+      ctx.lineTo(x + 80, y + 48);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = "#f4ead8";
+      ctx.fillRect(x + 68, y + 46, 3, 3);
+      ctx.fillRect(x + 80, y + 46, 3, 3);
+    }
+  }
+  ctx.restore();
+  ctx.strokeStyle = "#e0c17a";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, 149, 95);
+  ctx.fillStyle = "#e23b3b";
+  ctx.fillRect(x + 8, y + 8, 7, 7);
+  ctx.fillStyle = "#f4ead8";
+  ctx.font = "11px ui-monospace, Menlo, monospace";
+  ctx.textAlign = "left";
+  ctx.fillText("LIVE", x + 18, y + 16);
+}
+
+function drawCurtains() {
+  for (let i = 0; i < 3; i++) {
+    ctx.fillStyle = i % 2 ? "#4a121c" : "#7c2433";
+    ctx.fillRect(i * 26, 0, 30, VH);
+    ctx.fillRect(VW - 30 - i * 26, 0, 30, VH);
+  }
+  ctx.fillStyle = "#e0c17a";
+  ctx.fillRect(0, 0, VW, 8);
+  ctx.fillRect(78, 0, 2, VH);
+  ctx.fillRect(VW - 80, 0, 2, VH);
+}
+
+function drawSpotlight(px) {
+  const g = ctx.createRadialGradient(px, GROUND - 80, 50, px, GROUND - 40, 460);
+  g.addColorStop(0, "rgba(255, 226, 180, 0)");
+  g.addColorStop(1, "rgba(6, 2, 4, 0.78)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, VW, VH);
+}
+
+function draw() {
+  const tell = mode === "play" ? poppingX() : null;
+  const sx = (Math.random() - 0.5) * shake;
+  const sy = (Math.random() - 0.5) * shake;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, VW, VH);
+  ctx.save();
+  ctx.translate(sx, sy);
+  drawBackdrop();
+  drawAudience(tell == null ? null : tell - camX);
+  drawFloor();
+  drawSprings();
+  drawHurdles();
+  drawSwings();
+  drawExit();
+  drawProps();
+  const moving = Math.abs(player.vx) > 20 && player.onGround;
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(player.x - camX + PLAYER_W / 2, player.y + PLAYER_H + 3, 16, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  drawSticky(
+    player.x - camX + PLAYER_W / 2,
+    player.y,
+    player.facing,
+    player.shock,
+    player.squash,
+    player.step,
+    !player.onGround,
+    moving
+  );
+  if (showBoxes) {
+    ctx.strokeStyle = "#0f0";
+    ctx.strokeRect(player.x - camX, player.y, PLAYER_W, PLAYER_H);
+  }
+  drawSpotlight(player.x - camX + PLAYER_W / 2);
+  drawDoom();
+  if (wipe > 0 && mode === "play") {
+    ctx.globalAlpha = Math.min(1, wipe * 1.6);
+    ctx.fillStyle = "#f4ead8";
+    ctx.font = "40px Palatino, Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.fillText("FROM THE TOP", VW / 2, 210);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
+  }
+  if (actBanner > 0 && mode === "play") {
+    ctx.globalAlpha = Math.min(1, actBanner);
+    ctx.fillStyle = "#f4ead8";
+    ctx.font = "28px Palatino, Georgia, serif";
+    ctx.textAlign = "center";
+    ctx.fillText(actName, VW / 2, 150);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
+  }
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life / p.max);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - camX, p.y, p.r, p.r);
+  }
+  ctx.globalAlpha = 1;
+  drawCurtains();
+  drawCam();
+  ctx.restore();
+}
+
+let last = performance.now();
+function frame(now) {
+  let dt = (now - last) / 1000;
+  last = now;
+  if (dt > 0.033) dt = 0.033;
+  update(dt);
+  draw();
+  jumpEdge = false;
+  requestAnimationFrame(frame);
+}
+
+window.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if ([" ", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
+  if (e.repeat) return;
+  keys.add(k);
+  if (k === " " || k === "arrowup" || k === "w") jumpEdge = true;
+  if (k === "enter" && mode !== "play") startGame();
+  if (k === "r" && mode !== "title") startGame();
+  if (k === "m") toggleMute();
+});
+window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+function bindHold(id, name) {
+  const el = document.getElementById(id);
+  const down = (e) => {
+    e.preventDefault();
+    hold[name] = true;
+    if (name === "jump") jumpEdge = true;
+  };
+  const up = (e) => {
+    e.preventDefault();
+    hold[name] = false;
+  };
+  el.addEventListener("pointerdown", down);
+  el.addEventListener("pointerup", up);
+  el.addEventListener("pointerleave", up);
+  el.addEventListener("pointercancel", up);
+}
+bindHold("bLeft", "left");
+bindHold("bRight", "right");
+bindHold("bSlow", "slow");
+bindHold("bJump", "jump");
+
+function toggleMute() {
+  muted = !muted;
+  document.getElementById("mute").textContent = muted ? "SOUND OFF" : "SOUND ON";
+}
+document.getElementById("mute").addEventListener("click", toggleMute);
+document.getElementById("play").addEventListener("click", startGame);
+document.getElementById("again").addEventListener("click", startGame);
+
+resetRun();
+showBest();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
